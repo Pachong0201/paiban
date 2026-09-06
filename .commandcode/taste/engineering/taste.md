@@ -1,0 +1,10 @@
+# Engineering
+
+- Prioritizes underlying correctness and data fidelity over UI completeness or delivery speed; explicitly orders priorities as document/user-data safety > faithful round-trip preservation > compatibility with target applications > formatting correctness > template system > validation > editing UX > visuals. Confidence: 0.9
+- Rejects lossy pipeline shortcuts, e.g. converting a rich document to an intermediate format (HTML/Markdown/rich text) as the source of truth, silently deleting unsupported content, or silently replacing declared fonts with substitutes. Rule of thumb the user stated: "看不懂可以不编辑，但不能因为看不懂就删除" — never delete what the program doesn't understand; preserve it. Confidence: 0.9
+- Treats the user's original file as an immutable source by default — never overwrite it; edit a working copy and export to a new file; any parse/export failure must never corrupt the original. Confidence: 0.9
+- Wants clean layered architecture with explicit module boundaries; forbids mixing format parsing/domain logic into UI layers, giant ViewModels/Activities, mutable global state, and broad catch(Exception) blocks that silently swallow errors. Confidence: 0.85
+- Requires third-party libraries be audited before adoption (license, maintenance status, compatibility, size/memory cost, and whether the library silently rewrites or drops unknown data); never adopt a library just because it "can open the format", and never let a lossy library become the source of truth. Confidence: 0.8
+- Careful with licensing: must not bundle fonts or other assets without clear redistribution rights. Confidence: 0.8
+- Privacy-conscious by default: features should work fully offline with no unnecessary permissions (e.g., no INTERNET permission in the release manifest if unneeded), and user files should not be copied into app-private storage without a reason. Confidence: 0.8
+- Expects designs to scale to large inputs: lazy/viewport-driven rendering, incremental parsing, caching, and image sampling rather than building/rendering everything up front (e.g., no OOM on 50–100 page documents). Confidence: 0.75
