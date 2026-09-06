@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,17 @@ private fun AppRoot() {
     val editorVm: EditorViewModel = viewModel()
     val templateVm: TemplateViewModel = viewModel()
     var screen by remember { mutableStateOf("home") }
+    var recoveryChecked by remember { mutableStateOf(false) }
+
+    // 崩溃恢复：启动时若有快照则直接进入编辑器
+    LaunchedEffect(Unit) {
+        if (!recoveryChecked) {
+            recoveryChecked = true
+            if (editorVm.tryRestoreAutoRecovery()) {
+                screen = "editor"
+            }
+        }
+    }
 
     // SAF 打开
     val openLauncher = rememberLauncherForActivityResult(

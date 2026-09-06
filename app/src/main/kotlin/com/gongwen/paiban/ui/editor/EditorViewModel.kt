@@ -55,6 +55,28 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private val undoStack = ArrayDeque<ByteArray>()
     private val redoStack = ArrayDeque<ByteArray>()
 
+    /** 启动时检查自动恢复快照（规格 §37 崩溃恢复）。 */
+    fun checkAutoRecovery(onRestored: () -> Unit) {
+        if (repo.hasAutoRecovery()) {
+            val restored = repo.loadAutoRecovery()
+            if (restored != null) {
+                onRestored()
+                return
+            }
+        }
+    }
+
+    /** 尝试恢复上次未保存编辑；返回是否成功。 */
+    fun tryRestoreAutoRecovery(): Boolean {
+        val restored = repo.loadAutoRecovery()
+        if (restored != null) {
+            updateFromSession(restored.displayName)
+            _ui.update { it.copy(info = "已恢复上次未保存的编辑") }
+            return true
+        }
+        return false
+    }
+
     fun openUri(uri: Uri) {
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, error = null) }
