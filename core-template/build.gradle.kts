@@ -18,3 +18,7 @@ dependencies {
     api(project(":core-document"))
     testImplementation(libs.junit)
 }
+
+tasks.test {
+    workingDir = rootProject.projectDir
+}

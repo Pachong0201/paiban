@@ -18,3 +18,7 @@ dependencies {
     api(project(":core-ooxml"))
     testImplementation(libs.junit)
 }
+
+tasks.test {
+    workingDir = rootProject.projectDir
+}

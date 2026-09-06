@@ -19,3 +19,7 @@ dependencies {
     api(project(":core-template"))
     testImplementation(libs.junit)
 }
+
+tasks.test {
+    workingDir = rootProject.projectDir
+}

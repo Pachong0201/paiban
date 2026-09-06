@@ -17,3 +17,8 @@ kotlin {
 dependencies {
     testImplementation(libs.junit)
 }
+
+tasks.test {
+    // 统一以仓库根为工作目录，便于共享 testdata/ corpus
+    workingDir = rootProject.projectDir
+}
