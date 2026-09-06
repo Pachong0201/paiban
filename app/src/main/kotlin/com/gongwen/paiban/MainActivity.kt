@@ -21,6 +21,8 @@ import com.gongwen.paiban.ui.HomeScreen
 import com.gongwen.paiban.ui.editor.EditorScreen
 import com.gongwen.paiban.ui.editor.EditorViewModel
 import com.gongwen.paiban.ui.preview.PreviewScreen
+import com.gongwen.paiban.ui.template.TemplateScreen
+import com.gongwen.paiban.ui.template.TemplateViewModel
 import com.gongwen.paiban.ui.theme.PaibanTheme
 
 class MainActivity : ComponentActivity() {
@@ -39,6 +41,7 @@ class MainActivity : ComponentActivity() {
 private fun AppRoot() {
     val context = LocalContext.current
     val editorVm: EditorViewModel = viewModel()
+    val templateVm: TemplateViewModel = viewModel()
     var screen by remember { mutableStateOf("home") }
 
     // SAF 打开
@@ -48,6 +51,27 @@ private fun AppRoot() {
         if (uri != null) {
             editorVm.openUri(uri)
             screen = "editor"
+        }
+    }
+    // 导入 .twtemplate
+    val templateImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            if (bytes != null) templateVm.importFromBytes(bytes)
+        }
+    }
+    // 导出 .twtemplate
+    val templateExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            templateVm.exportTemplateBytes(
+                com.gongwen.paiban.data.AppPrefs.activeTemplateId(context)
+            )?.let { bytes ->
+                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            }
         }
     }
     // 导出 DOCX（另存为）
@@ -89,7 +113,17 @@ private fun AppRoot() {
                 screen = "editor"
             },
             onCheck = { screen = "editor" },
-            onTemplates = { /* 模板库 Phase 4b */ },
+            onTemplates = { screen = "templates" },
+        )
+        "templates" -> TemplateScreen(
+            viewModel = templateVm,
+            onBack = { screen = "home" },
+            onImportPick = {
+                templateImportLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+            },
+            onExportPick = {
+                templateExportLauncher.launch("公文模板_${System.currentTimeMillis()}.twtemplate")
+            },
         )
         "editor" -> EditorScreen(
             viewModel = editorVm,

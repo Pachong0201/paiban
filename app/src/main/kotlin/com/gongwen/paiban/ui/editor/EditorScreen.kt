@@ -136,7 +136,7 @@ fun EditorScreen(
             EditorTab.EDIT -> ParagraphList(state, viewModel, Modifier.padding(padding))
             EditorTab.STYLE -> StyleTab(state, viewModel, Modifier.padding(padding))
             EditorTab.FORMAT -> FormatTab(viewModel, Modifier.padding(padding))
-            EditorTab.CHECK -> CheckTab(state, Modifier.padding(padding))
+            EditorTab.CHECK -> CheckTab(state, viewModel, Modifier.padding(padding))
             EditorTab.MORE -> MoreTab(state, onPreview, Modifier.padding(padding))
         }
     }
@@ -269,23 +269,38 @@ private fun FormatTab(viewModel: EditorViewModel, modifier: Modifier = Modifier)
 }
 
 @Composable
-private fun CheckTab(state: EditorUiState, modifier: Modifier = Modifier) {
+private fun CheckTab(state: EditorUiState, viewModel: EditorViewModel, modifier: Modifier = Modifier) {
     val report = state.report
     Column(modifier.fillMaxWidth().padding(16.dp)) {
-        Text("格式检查（按当前模板）", style = MaterialTheme.typography.titleMedium)
+        Text("格式检查（按当前模板：${state.templateName}）", style = MaterialTheme.typography.titleMedium)
         if (report == null) {
-            Text("尚未执行检查。请先执行一键排版，再进入“排版/检查”。")
+            Text("尚未执行检查。", modifier = Modifier.padding(top = 8.dp))
+            Button(onClick = { viewModel.runCheck() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Text("执行格式检查")
+            }
         } else {
-            Text("严重 ${report.errorCount}　警告 ${report.warningCount}　提示 ${report.infoCount}")
+            Text(
+                "严重 ${report.errorCount}　警告 ${report.warningCount}　提示 ${report.infoCount}",
+                modifier = Modifier.padding(top = 8.dp),
+                color = if (report.errorCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
             if (report.findings.isEmpty()) {
-                Text("未发现问题。")
+                Text("未发现问题。", modifier = Modifier.padding(top = 8.dp))
             } else {
                 val first = report.findings.first()
                 Text(
                     "示例：第 ${first.paragraphIndex + 1} 段 — ${first.message}\n${first.current}\n${first.expected}",
                     style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
+            Button(
+                onClick = { viewModel.runOneClickFormat() },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            ) {
+                Text("一键修复可自动修复项（按当前模板重新排版）")
+            }
+            TextButton(onClick = { viewModel.runCheck() }) { Text("重新检查") }
         }
     }
 }

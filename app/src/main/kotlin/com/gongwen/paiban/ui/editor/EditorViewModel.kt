@@ -55,9 +55,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private val undoStack = ArrayDeque<ByteArray>()
     private val redoStack = ArrayDeque<ByteArray>()
 
-    /** 一键排版（识别+应用）。 */
-    private val formatter by lazy { OneClickGongwenFormatter(repo.listTemplates()) }
-
     fun openUri(uri: Uri) {
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, error = null) }
@@ -203,29 +200,45 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         updateFromSession(session.displayName)
     }
 
-    /** 一键公文排版（识别 + 应用）。 */
+    private fun activeTemplateId(): String =
+        com.gongwen.paiban.data.AppPrefs.activeTemplateId(getApplication())
+
+    /** 一键公文排版（识别 + 应用，按当前激活模板）。 */
     fun runOneClickFormat() {
         val session = repo.current ?: return
         snapshot()
         viewModelScope.launch {
             withContext(Dispatchers.Default) {
+                val templates = repo.listTemplates()
+                val formatter = OneClickGongwenFormatter(templates, activeTemplateId())
                 val suspects = formatter.detectAndAnnotate(session.document)
                 formatter.format(session.document)
                 val suspectMsg = if (suspects.isEmpty()) "" else "发现 ${suspects.size} 处疑似标题，请人工确认。"
-                _ui.update { it.copy(info = "排版完成。$suspectMsg") }
+                _ui.update {
+                    it.copy(
+                        info = "排版完成。$suspectMsg",
+                        templateName = templates[activeTemplateId()]?.metadata?.name ?: "",
+                    )
+                }
                 updateFromSession(session.displayName)
             }
         }
     }
 
-    /** 格式检查（按当前模板）。 */
+    /** 格式检查（按当前激活模板）。 */
     fun runCheck() {
         val session = repo.current ?: return
         viewModelScope.launch {
             withContext(Dispatchers.Default) {
-                val validator = DocumentValidator(repo.listTemplates(), Gbt9704Template.TEMPLATE_ID)
+                val templates = repo.listTemplates()
+                val validator = DocumentValidator(templates, activeTemplateId())
                 val report = validator.validate(session.document.paragraphs)
-                _ui.update { it.copy(report = report) }
+                _ui.update {
+                    it.copy(
+                        report = report,
+                        templateName = templates[activeTemplateId()]?.metadata?.name ?: "",
+                    )
+                }
             }
         }
     }
