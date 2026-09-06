@@ -265,6 +265,10 @@ object TemplateJson {
         )
     }
 
+    /** 从独立 JSON 文本解析文字样式。 */
+    fun textStyleFromJson(json: String): TextStyle =
+        textStyleFromObj(parse(json) as? JObject)
+
     fun rulesFromJson(json: String): List<ValidationRule> {
         val arr = parse(json).arrOrNull() ?: return emptyList()
         val out = ArrayList<ValidationRule>()
