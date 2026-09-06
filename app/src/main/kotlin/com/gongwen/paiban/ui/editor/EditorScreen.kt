@@ -149,6 +149,8 @@ private fun ParagraphList(
     modifier: Modifier = Modifier,
 ) {
     var rolePickerFor by remember { mutableStateOf<Int?>(null) }
+    var editingCell by remember { mutableStateOf<CellRef?>(null) }
+    var showInsertTable by remember { mutableStateOf(false) }
     LazyColumn(modifier = modifier.fillMaxSize()) {
         itemsIndexed(state.paragraphTexts) { index, para ->
             if (para.inTable) return@itemsIndexed
@@ -187,6 +189,40 @@ private fun ParagraphList(
                 }
             }
         }
+        // 表格区
+        state.tables.forEach { table ->
+            item(key = "table-${table.index}") {
+                Text(
+                    "表格 ${table.index + 1}（${table.rowCount}行×${table.colCount}列）",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                table.rows.forEachIndexed { r, cells ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        cells.forEachIndexed { c, cellText ->
+                            TextButton(
+                                onClick = { editingCell = CellRef(table.index, r, c) },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    cellText.ifBlank { "…" },
+                                    maxLines = 2,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Button(
+                onClick = { showInsertTable = true },
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+            ) {
+                Text("插入表格")
+            }
+        }
     }
     rolePickerFor?.let { pickIndex ->
         RolePickerDialog(
@@ -198,6 +234,99 @@ private fun ParagraphList(
             onDismiss = { rolePickerFor = null },
         )
     }
+    editingCell?.let { cell ->
+        val table = state.tables.getOrNull(cell.tableIndex)
+        val current = table?.rows?.getOrNull(cell.row)?.getOrNull(cell.col) ?: ""
+        CellEditDialog(
+            title = "表格 ${cell.tableIndex + 1} 第${cell.row + 1}行第${cell.col + 1}列",
+            initial = current,
+            onSave = { text ->
+                viewModel.setTableText(cell.tableIndex, cell.row, cell.col, text)
+                editingCell = null
+            },
+            onDismiss = { editingCell = null },
+        )
+    }
+    if (showInsertTable) {
+        InsertTableDialog(
+            onConfirm = { rows, cols ->
+                viewModel.insertTable(rows, cols, emptyList())
+                showInsertTable = false
+            },
+            onDismiss = { showInsertTable = false },
+        )
+    }
+}
+
+/** 单元格坐标。 */
+private data class CellRef(val tableIndex: Int, val row: Int, val col: Int)
+
+@Composable
+private fun CellEditDialog(
+    title: String,
+    initial: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(text) }) { Text("保存") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
+@Composable
+private fun InsertTableDialog(
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var rows by remember { mutableStateOf("3") }
+    var cols by remember { mutableStateOf("4") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("插入表格") },
+        text = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = rows,
+                    onValueChange = { rows = it.filter(Char::isDigit) },
+                    label = { Text("行数") },
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = cols,
+                    onValueChange = { cols = it.filter(Char::isDigit) },
+                    label = { Text("列数") },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val r = rows.toIntOrNull()?.coerceIn(1, 50) ?: 3
+                    val c = cols.toIntOrNull()?.coerceIn(1, 20) ?: 4
+                    onConfirm(r, c)
+                },
+            ) { Text("插入") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 /** 角色选择对话框（规格 §11：正文/主标题/各级标题/主送/附件/落款/日期…）。 */

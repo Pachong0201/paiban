@@ -32,7 +32,17 @@ data class EditorUiState(
     val report: ValidationReport? = null,
     val templateName: String = "GB/T 9704—2012",
     val fontSummary: String = "",
+    val tables: List<TableUi> = emptyList(),
 )
+
+/** 表格 UI 摘要。 */
+data class TableUi(
+    val index: Int,
+    val rows: List<List<String>>,
+) {
+    val rowCount: Int get() = rows.size
+    val colCount: Int get() = rows.maxOfOrNull { it.size } ?: 0
+}
 
 /** 段落 UI 呈现（含文本与角色标签）。 */
 data class ParagraphUi(
@@ -107,6 +117,16 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 role = p.effectiveRole,
             )
         }
+        val tableUi = session.document.tables.mapIndexed { ti, table ->
+            TableUi(
+                index = ti,
+                rows = table.rows.map { row ->
+                    row.cells.map { cell ->
+                        cell.paragraphs.joinToString("") { it.text }
+                    }
+                },
+            )
+        }
         _ui.update {
             it.copy(
                 isOpen = true,
@@ -117,6 +137,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 canRedo = redoStack.isNotEmpty(),
                 error = null,
                 fontSummary = fontSummary(session),
+                tables = tableUi,
             )
         }
     }
@@ -186,6 +207,26 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             com.gongwen.document.model.FormatLockScope.NONE
         }
+        updateFromSession(session.displayName)
+    }
+
+    /** 在文末插入表格（规格 §26 最小集）。 */
+    fun insertTable(rows: Int, cols: Int, headers: List<String>) {
+        val session = repo.current ?: return
+        snapshot()
+        val editor = DocumentModelEditor(session.document)
+        editor.createTable(rows, cols, headers)
+        updateFromSession(session.displayName)
+        _ui.update { it.copy(info = "已插入 ${rows}×$cols 表格到文档末尾") }
+    }
+
+    /** 表格单元格文本编辑。 */
+    fun setTableText(tableIndex: Int, row: Int, col: Int, text: String) {
+        val session = repo.current ?: return
+        val table = session.document.tables.getOrNull(tableIndex) ?: return
+        snapshot()
+        val editor = DocumentModelEditor(session.document)
+        editor.setTableCellText(table, row, col, text)
         updateFromSession(session.displayName)
     }
 
