@@ -43,7 +43,15 @@
       "Shell(/tmp/gradle-dist/gradle-8.9/bin/gradle:*)",
       "Shell(chmod:*)",
       "Shell(./gradlew:*)",
-      "Shell(git:*)"
+      "Shell(git:*)",
+      "Shell(grep:*)",
+      "Shell(cat:*)",
+      "Shell(sed:*)",
+      "Shell(cd /home/user/paiban && export JAVA_HOME=~/jdks/fresh/jdk-17.0.20.1+1 && for f in core-ooxml/build/reports/tests/test/classes/*.html; do python3 - \"$f\" <<'EOF' import sys, re, html t = open(sys.argv[1]).read() for m in re.finditer(r'<h3[^>]*>(.*?)</h3>.*?<pre>(.*?)</pre>', t, re.S): name = html.unescape(re.sub(r'<[^>]+>', '', m.group(1))) stack = html.unescape(re.sub(r'<[^>]+>', '', m.group(2))) lines = [l for l in stack.splitlines() if l.strip()][:6] print(name, '=>', ' | '.join(lines)) EOF done)",
+      "Shell(cd /home/user/paiban && export JAVA_HOME=~/jdks/fresh/jdk-17.0.20.1+1 && python3 - <<'EOF' import re, html t = open('core-ooxml/build/reports/tests/test/classes/com.gongwen.ooxml.RoundTripTest.html').read() for m in re.finditer(r'<h3[^>]*>(.*?)</h3>.*?<pre>(.*?)</pre>', t, re.S): name = html.unescape(re.sub(r'<[^>]+>', '', m.group(1))) stack = html.unescape(re.sub(r'<[^>]+>', '', m.group(2))) lines = [l for l in stack.splitlines() if l.strip()][:4] print(name); [print(' ', l) for l in lines] EOF)",
+      "Shell(cd /home/user/paiban && cat > /tmp/Diag.java <<'EOF' EOF export JAVA_HOME=~/jdks/fresh/jdk-17.0.20.1+1 && cat > /tmp/diag.kt <<'EOF' import com.gongwen.ooxml.* fun main() { val original = TestDocxBuilder.build() val pkg = OoxmlPackage.open(original) println(\"=== 原始 [Content_Types].xml ===\") println(String(pkg.requirePart(\"/[Content_Types].xml\").byteArray(), Charsets.UTF_8)) val rebuilt = OoxmlPackageSerializer.buildContentTypesXml(pkg) println(\"=== 重建 [Content_Types].xml ===\") println(String(rebuilt, Charsets.UTF_8)) } EOF cp /tmp/diag.kt /home/user/paiban/core-ooxml/src/test/kotlin/com/gongwen/ooxml/Diag.kt ./gradlew :core-ooxml:test --tests \"com.gongwen.ooxml.Diag\" 2>&1 | tail -2 # instead run via kotlin main in test compile - simpler: use a JUnit-free main through kotlinc? Just use gradle test sourceset rm /home/user/paiban/core-ooxml/src/test/kotlin/com/gongwen/ooxml/Diag.kt)",
+      "Shell(cd /home/user/paiban && export JAVA_HOME=~/jdks/fresh/jdk-17.0.20.1+1 && ./gradlew :core-ooxml:test --tests \"com.gongwen.ooxml.DiagTest\" 2>&1 | tail -2; cat core-ooxml/build/reports/tests/test/classes/com.gongwen.ooxml.DiagTest.html 2>/dev/null | python3 -c \" import sys, re, html t = sys.stdin.read() m = re.search(r'<pre>(.*?)</pre>', t, re.S) if m: print(html.unescape(re.sub(r'<[^>]+>', '', m.group(1)))) \")",
+      "Shell(rm /home/user/paiban/core-ooxml/src/test/kotlin/com/gongwen/ooxml/DiagTest.kt && cd /home/user/paiban && export JAVA_HOME=~/jdks/fresh/jdk-17.0.20.1+1 && ./gradlew :core-ooxml:test 2>&1 | grep -E \"FAILED|BUILD|tests completed\"; find core-ooxml/build/test-results/test -name \"*.xml\" | xargs grep -h \"testsuite \" 2>/dev/null | grep -oE 'tests=\"[0-9]+\" skipped=\"[0-9]+\" failures=\"[0-9]+\" errors=\"[0-9]+\"')"
     ],
     "deny": [],
     "defaultMode": "default"
