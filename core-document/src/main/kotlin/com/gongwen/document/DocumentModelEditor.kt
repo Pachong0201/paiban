@@ -4,6 +4,9 @@ import com.gongwen.document.model.Paragraph
 import com.gongwen.document.model.ParagraphProperties
 import com.gongwen.document.model.Run
 import com.gongwen.document.model.RunProperties
+import com.gongwen.document.model.Table
+import com.gongwen.document.model.TableRow
+import com.gongwen.document.model.TableCell
 import com.gongwen.document.xml.BodyBlock
 import com.gongwen.document.xml.DocumentParser
 import com.gongwen.document.xml.DocumentXmlEditor
@@ -16,13 +19,25 @@ class WorkingDocument internal constructor(
     parsed: DocumentParser.ParsedDocument,
 ) {
     /** 正文段落（不含表格内段落）。 */
-    val paragraphs: List<Paragraph> = parsed.paragraphs
+    var paragraphs: List<Paragraph> = parsed.paragraphs
+        private set
     /** 表格。 */
-    val tables = parsed.tables
+    var tables: List<Table> = parsed.tables
+        private set
     /** 全部块级对象（按顺序，含段落与表格）。 */
-    val topLevelObjects = parsed.topLevelObjects
+    var topLevelObjects: List<Any> = parsed.topLevelObjects
+        private set
 
     internal val xmlEditor = DocumentXmlEditor(xmlPart)
+
+    /** 结构变更后重新解析模型并同步引用。 */
+    internal fun resyncFromXml() {
+        xmlPart.rescanFromDom()
+        val reparsed = DocumentParser(xmlPart).parse()
+        paragraphs = reparsed.paragraphs
+        tables = reparsed.tables
+        topLevelObjects = reparsed.topLevelObjects
+    }
 
     /** 该段所属顶层块（表格段为表格块）。 */
     internal fun blockOf(p: Paragraph): BodyBlock =
@@ -70,5 +85,38 @@ class DocumentModelEditor(private val doc: WorkingDocument) {
         val copy = RunProperties()
         copy.copyFrom(src)
         return copy
+    }
+
+    // ===== 表格操作（MVP 最小集） =====
+
+    private fun tableDom(table: Table): org.w3c.dom.Element {
+        val block = table.ooxmlAnchor as? BodyBlock
+            ?: error("表格 ${table.stableId} 缺少块锚点")
+        return doc.xmlPart.domElementOf(block)
+    }
+
+    /** 创建 rows×cols 表格并追加到文档末尾。返回模型 Table。 */
+    fun createTable(rows: Int, cols: Int, headers: List<String> = emptyList()): Table {
+        doc.xmlEditor.createTable(rows, cols, headers)
+        doc.resyncFromXml()
+        return doc.tables.lastOrNull() ?: error("表格创建后解析失败")
+    }
+
+    /** 表格加一行（texts 每列文本）。 */
+    fun appendTableRow(table: Table, texts: List<String> = emptyList()) {
+        doc.xmlEditor.addTableRow(tableDom(table), texts)
+        doc.resyncFromXml()
+    }
+
+    /** 设置单元格文本。 */
+    fun setTableCellText(table: Table, row: Int, col: Int, text: String) {
+        doc.xmlEditor.setCellText(tableDom(table), row, col, text)
+        doc.resyncFromXml()
+    }
+
+    /** 删除表格行。 */
+    fun deleteTableRow(table: Table, row: Int) {
+        doc.xmlEditor.deleteTableRow(tableDom(table), row)
+        doc.resyncFromXml()
     }
 }

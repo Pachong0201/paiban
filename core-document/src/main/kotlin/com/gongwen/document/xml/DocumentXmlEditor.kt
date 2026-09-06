@@ -200,4 +200,137 @@ class DocumentXmlEditor(private val xmlPart: DocumentXmlPart) {
         el.setAttributeNS(W_NS, "w:val", value)
         parent.appendChild(el)
     }
+
+    // ===== 表格操作（规格 §26 最小集） =====
+
+    /** 新建 rows×cols 表格（首行表头），插入到 sectPr 前。返回新表格 DOM。 */
+    fun createTable(rows: Int, cols: Int, headers: List<String> = emptyList()): Element {
+        val doc = xmlPart.domDocument
+        val tbl = doc.createElementNS(W_NS, "w:tbl")
+        // tblPr：整表宽 + 边框
+        val tblPr = doc.createElementNS(W_NS, "w:tblPr")
+        val tblW = doc.createElementNS(W_NS, "w:tblW")
+        tblW.setAttributeNS(W_NS, "w:w", "9600")
+        tblW.setAttributeNS(W_NS, "w:type", "dxa")
+        tblPr.appendChild(tblW)
+        val borders = doc.createElementNS(W_NS, "w:tblBorders")
+        for (edge in listOf("top", "left", "bottom", "right", "insideH", "insideV")) {
+            val b = doc.createElementNS(W_NS, "w:$edge")
+            b.setAttributeNS(W_NS, "w:val", "single")
+            b.setAttributeNS(W_NS, "w:sz", "4")
+            b.setAttributeNS(W_NS, "w:color", "000000")
+            borders.appendChild(b)
+        }
+        tblPr.appendChild(borders)
+        tbl.appendChild(tblPr)
+        // grid
+        val tblGrid = doc.createElementNS(W_NS, "w:tblGrid")
+        repeat(cols) {
+            val gc = doc.createElementNS(W_NS, "w:gridCol")
+            gc.setAttributeNS(W_NS, "w:w", (9600 / cols).toString())
+            tblGrid.appendChild(gc)
+        }
+        tbl.appendChild(tblGrid)
+
+        fun cellElement(text: String, isHeader: Boolean): Element {
+            val tc = doc.createElementNS(W_NS, "w:tc")
+            val tcPr = doc.createElementNS(W_NS, "w:tcPr")
+            val tcW = doc.createElementNS(W_NS, "w:tcW")
+            tcW.setAttributeNS(W_NS, "w:w", (9600 / cols).toString())
+            tcW.setAttributeNS(W_NS, "w:type", "dxa")
+            tcPr.appendChild(tcW)
+            tc.appendChild(tcPr)
+            val pEl = doc.createElementNS(W_NS, "w:p")
+            val pPr = doc.createElementNS(W_NS, "w:pPr")
+            val jc = doc.createElementNS(W_NS, "w:jc")
+            jc.setAttributeNS(W_NS, "w:val", "center")
+            pPr.appendChild(jc)
+            pEl.appendChild(pPr)
+            val r = doc.createElementNS(W_NS, "w:r")
+            if (isHeader) {
+                val rPr = doc.createElementNS(W_NS, "w:rPr")
+                val b = doc.createElementNS(W_NS, "w:b")
+                rPr.appendChild(b)
+                r.appendChild(rPr)
+            }
+            val t = doc.createElementNS(W_NS, "w:t")
+            t.textContent = text
+            r.appendChild(t)
+            pEl.appendChild(r)
+            tc.appendChild(pEl)
+            return tc
+        }
+
+        // 数据行（默认空 + 序号）
+        for (rowIdx in 0 until rows) {
+            val tr = doc.createElementNS(W_NS, "w:tr")
+            for (c in 0 until cols) {
+                val text = if (rowIdx == 0) headers.getOrElse(c) { "列${c + 1}" } else ""
+                tr.appendChild(cellElement(text, rowIdx == 0))
+            }
+            tbl.appendChild(tr)
+        }
+        xmlPart.appendBodyElement(tbl)
+        return tbl
+    }
+
+    /** 在表格末尾加一行。tableElement 来自该表 DOM。 */
+    fun addTableRow(tableElement: Element, texts: List<String> = emptyList()) {
+        markBodyChildDirty(tableElement)
+        val doc = xmlPart.domDocument
+        val tr = doc.createElementNS(W_NS, "w:tr")
+        val cellCount = tableElement.getElementsByTagNameNS(W_NS, "tr").let { list ->
+            if (list.length > 0) (list.item(0) as Element).getElementsByTagNameNS(W_NS, "tc").length else 1
+        }
+        for (c in 0 until cellCount) {
+            val tc = doc.createElementNS(W_NS, "w:tc")
+            val pEl = doc.createElementNS(W_NS, "w:p")
+            val r = doc.createElementNS(W_NS, "w:r")
+            val t = doc.createElementNS(W_NS, "w:t")
+            t.textContent = texts.getOrElse(c) { "" }
+            r.appendChild(t)
+            pEl.appendChild(r)
+            tc.appendChild(pEl)
+            tr.appendChild(tc)
+        }
+        tableElement.appendChild(tr)
+    }
+
+    /** 设置单元格文本（第 r 行第 c 列）。 */
+    fun setCellText(tableElement: Element, row: Int, col: Int, text: String) {
+        markBodyChildDirty(tableElement)
+        val trs = childElements(tableElement).filter { it.localName == "tr" }
+        if (row !in trs.indices) return
+        val tcs = childElements(trs[row]).filter { it.localName == "tc" }
+        if (col !in tcs.indices) return
+        val tc = tcs[col]
+        // 单元格文字所在段 = tc 下第一个 w:p
+        val pEl = childElements(tc).firstOrNull { it.localName == "p" } ?: return
+        replaceTextInElement(pEl, text)
+    }
+
+    /** 删除表格某行。 */
+    fun deleteTableRow(tableElement: Element, row: Int) {
+        markBodyChildDirty(tableElement)
+        val trs = childElements(tableElement).filter { it.localName == "tr" }
+        if (row in trs.indices) {
+            tableElement.removeChild(trs[row])
+        }
+    }
+
+    /** 通过 body 子元素定位并标记所属块 dirty（表格被直接改 DOM 时）。 */
+    private fun markBodyChildDirty(child: Element) {
+        var idx = 0
+        val children = xmlPart.bodyRoot.childNodes
+        for (i in 0 until children.length) {
+            val n = children.item(i)
+            if (n is Element) {
+                if (n === child) {
+                    xmlPart.blockAt(idx).let { xmlPart.markDirty(it) }
+                    return
+                }
+                idx++
+            }
+        }
+    }
 }
