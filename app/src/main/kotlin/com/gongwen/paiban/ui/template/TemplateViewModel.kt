@@ -158,5 +158,21 @@ class TemplateViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /** 更新模板（编辑后保存）。 */
+    fun updateTemplate(updated: DocumentTemplate) {
+        repo.saveUserTemplate(updated)
+        refresh()
+    }
+
+    /** 取单个模板（含继承合并后的有效样式）。 */
+    fun getEffective(templateId: String): DocumentTemplate? {
+        val all = repo.listTemplates()
+        return try {
+            TemplateResolver.resolveEffective(templateId, all)
+        } catch (_: Exception) {
+            all[templateId]
+        }
+    }
+
     private fun appContext() = getApplication<Application>()
 }

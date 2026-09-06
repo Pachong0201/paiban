@@ -44,6 +44,7 @@ fun TemplateScreen(
 ) {
     val state by viewModel.ui.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
+    var editingTemplate by remember { mutableStateOf<com.gongwen.template.model.DocumentTemplate?>(null) }
     val appContext = androidx.compose.ui.platform.LocalContext.current
 
     Scaffold(
@@ -95,6 +96,9 @@ fun TemplateScreen(
                                 )
                             }
                             if (!item.builtin) {
+                                TextButton(onClick = {
+                                    viewModel.getEffective(item.templateId)?.let { editingTemplate = it }
+                                }) { Text("编辑") }
                                 TextButton(onClick = { viewModel.deleteTemplate(item.templateId) }) { Text("删除") }
                             }
                         }
@@ -111,6 +115,16 @@ fun TemplateScreen(
                 showCreate = false
             },
             onDismiss = { showCreate = false },
+        )
+    }
+    editingTemplate?.let { t ->
+        TemplateEditDialog(
+            template = t,
+            onSave = { updated ->
+                viewModel.updateTemplate(updated)
+                editingTemplate = null
+            },
+            onDismiss = { editingTemplate = null },
         )
     }
 }
