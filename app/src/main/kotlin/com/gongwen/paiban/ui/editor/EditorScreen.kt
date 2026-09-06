@@ -63,6 +63,7 @@ fun EditorScreen(
     viewModel: EditorViewModel,
     onBack: () -> Unit,
     onExportDocx: () -> Unit,
+    onPreview: () -> Unit = {},
 ) {
     val state by viewModel.ui.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -136,7 +137,7 @@ fun EditorScreen(
             EditorTab.STYLE -> StyleTab(state, viewModel, Modifier.padding(padding))
             EditorTab.FORMAT -> FormatTab(viewModel, Modifier.padding(padding))
             EditorTab.CHECK -> CheckTab(state, Modifier.padding(padding))
-            EditorTab.MORE -> MoreTab(state, Modifier.padding(padding))
+            EditorTab.MORE -> MoreTab(state, onPreview, Modifier.padding(padding))
         }
     }
 }
@@ -147,16 +148,17 @@ private fun ParagraphList(
     viewModel: EditorViewModel,
     modifier: Modifier = Modifier,
 ) {
+    var rolePickerFor by remember { mutableStateOf<Int?>(null) }
     LazyColumn(modifier = modifier.fillMaxSize()) {
         itemsIndexed(state.paragraphTexts) { index, para ->
             if (para.inTable) return@itemsIndexed
-            var text by remember { mutableStateOf(para.text) }
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        para.roleLabel,
+                        if (para.formatLocked) "🔒 ${para.roleLabel}" else para.roleLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = if (para.formatLocked) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(end = 8.dp),
                     )
                     Text(
@@ -166,8 +168,8 @@ private fun ParagraphList(
                     )
                 }
                 OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
+                    value = para.text,
+                    onValueChange = { viewModel.setParagraphText(index, it) },
                     modifier = Modifier.fillMaxWidth(),
                     textStyle = androidx.compose.ui.text.TextStyle(
                         fontFamily = FontFamily.Serif,
@@ -178,11 +180,62 @@ private fun ParagraphList(
                     maxLines = 8,
                 )
                 Row {
-                    TextButton(onClick = { viewModel.setParagraphText(index, text) }) { Text("应用") }
+                    TextButton(onClick = { rolePickerFor = index }) { Text("设角色") }
+                    TextButton(onClick = { viewModel.toggleFormatLock(index) }) {
+                        Text(if (para.formatLocked) "解除锁定" else "锁定格式")
+                    }
                 }
             }
         }
     }
+    rolePickerFor?.let { pickIndex ->
+        RolePickerDialog(
+            currentRole = state.paragraphTexts.getOrNull(pickIndex)?.roleLabel ?: "",
+            onPick = { role ->
+                viewModel.setUserRole(pickIndex, role)
+                rolePickerFor = null
+            },
+            onDismiss = { rolePickerFor = null },
+        )
+    }
+}
+
+/** 角色选择对话框（规格 §11：正文/主标题/各级标题/主送/附件/落款/日期…）。 */
+@Composable
+private fun RolePickerDialog(
+    currentRole: String,
+    onPick: (com.gongwen.document.model.SemanticRole) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val roles = listOf(
+        com.gongwen.document.model.SemanticRole.BODY to "正文",
+        com.gongwen.document.model.SemanticRole.TITLE to "主标题",
+        com.gongwen.document.model.SemanticRole.HEADING1 to "一级标题",
+        com.gongwen.document.model.SemanticRole.HEADING2 to "二级标题",
+        com.gongwen.document.model.SemanticRole.HEADING3 to "三级标题",
+        com.gongwen.document.model.SemanticRole.HEADING4 to "四级标题",
+        com.gongwen.document.model.SemanticRole.RECIPIENT to "主送机关",
+        com.gongwen.document.model.SemanticRole.ATTACHMENT_DESC to "附件说明",
+        com.gongwen.document.model.SemanticRole.SIGNATURE to "发文机关署名",
+        com.gongwen.document.model.SemanticRole.DATE to "成文日期",
+        com.gongwen.document.model.SemanticRole.ANNOTATION to "附注",
+        com.gongwen.document.model.SemanticRole.COLOPHON to "版记",
+        com.gongwen.document.model.SemanticRole.OTHER to "其他",
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("设置段落角色（当前：$currentRole）") },
+        text = {
+            Column {
+                roles.forEach { (role, label) ->
+                    TextButton(onClick = { onPick(role) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(label, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+    )
 }
 
 @Composable
@@ -238,9 +291,25 @@ private fun CheckTab(state: EditorUiState, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun MoreTab(state: EditorUiState, modifier: Modifier = Modifier) {
+private fun MoreTab(state: EditorUiState, onPreview: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.padding(16.dp)) {
         Text("更多", style = MaterialTheme.typography.titleMedium)
-        Text("模板库 / 字体管理 / 设置 将在此提供。当前：${state.templateName}")
+        Button(onClick = onPreview, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Text("分页预览")
+        }
+        if (state.fontSummary.isNotEmpty()) {
+            Text(
+                state.fontSummary,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state.fontSummary.contains("缺失")) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+        Text(
+            "模板库 / 字体导入 / 设置 将在后续版本提供。当前模板：${state.templateName}",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }

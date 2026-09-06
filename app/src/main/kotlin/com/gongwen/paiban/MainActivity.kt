@@ -16,9 +16,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gongwen.paiban.data.PdfExporter
 import com.gongwen.paiban.ui.HomeScreen
 import com.gongwen.paiban.ui.editor.EditorScreen
 import com.gongwen.paiban.ui.editor.EditorViewModel
+import com.gongwen.paiban.ui.preview.PreviewScreen
 import com.gongwen.paiban.ui.theme.PaibanTheme
 
 class MainActivity : ComponentActivity() {
@@ -56,6 +58,18 @@ private fun AppRoot() {
             editorVm.exportTo(uri) { }
         }
     }
+    // 导出 PDF
+    val pdfLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val session = editorVm.currentSession()
+            if (session != null) {
+                val ok = PdfExporter.export(context, session.document, uri)
+                editorVm.notifyExportPdf(ok)
+            }
+        }
+    }
 
     when (screen) {
         "home" -> HomeScreen(
@@ -84,6 +98,12 @@ private fun AppRoot() {
                 editorVm.saveAutoRecovery()
                 exportLauncher.launch("排版输出_${System.currentTimeMillis()}.docx")
             },
+            onPreview = { screen = "preview" },
+        )
+        "preview" -> PreviewScreen(
+            session = editorVm.currentSession(),
+            onBack = { screen = "editor" },
+            onExportPdf = { pdfLauncher.launch("排版预览_${System.currentTimeMillis()}.pdf") },
         )
     }
 }

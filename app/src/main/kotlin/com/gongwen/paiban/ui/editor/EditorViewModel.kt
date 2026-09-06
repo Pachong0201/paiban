@@ -31,6 +31,7 @@ data class EditorUiState(
     val canRedo: Boolean = false,
     val report: ValidationReport? = null,
     val templateName: String = "GB/T 9704—2012",
+    val fontSummary: String = "",
 )
 
 /** 段落 UI 呈现（含文本与角色标签）。 */
@@ -40,6 +41,8 @@ data class ParagraphUi(
     val text: String,
     val roleLabel: String,
     val inTable: Boolean,
+    val formatLocked: Boolean = false,
+    val role: com.gongwen.document.model.SemanticRole = com.gongwen.document.model.SemanticRole.BODY,
 )
 
 /** 撤销快照：整个 document.xml 的字节级副本 + 模型重建由 DocumentService 负责。 */
@@ -75,7 +78,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private fun updateFromSession(name: String) {
         val session = repo.current ?: return
         val texts = session.document.paragraphs.mapIndexed { i, p ->
-            ParagraphUi(i, p.stableId, p.text, roleLabel(p), p.inTable)
+            ParagraphUi(
+                index = i,
+                stableId = p.stableId,
+                text = p.text,
+                roleLabel = roleLabel(p),
+                inTable = p.inTable,
+                formatLocked = p.formatLock != com.gongwen.document.model.FormatLockScope.NONE,
+                role = p.effectiveRole,
+            )
         }
         _ui.update {
             it.copy(
@@ -86,7 +97,22 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 canUndo = undoStack.isNotEmpty(),
                 canRedo = redoStack.isNotEmpty(),
                 error = null,
+                fontSummary = fontSummary(session),
             )
+        }
+    }
+
+    private fun fontSummary(session: com.gongwen.paiban.data.DocumentRepository.SessionDocument): String {
+        val fontManager = com.gongwen.paiban.data.FontManager(getApplication())
+        val usages = com.gongwen.document.DocumentFontScanner.scan(session.document.paragraphs)
+        if (usages.isEmpty()) return ""
+        val missing = usages.filter { !fontManager.isAvailable(it.fontName) }
+        val declared = usages.joinToString("、") { it.fontName }
+        return if (missing.isEmpty()) {
+            "本文件使用 ${usages.size} 种字体：$declared（均可用）"
+        } else {
+            "本文件使用 ${usages.size} 种字体：$declared。" +
+                "其中 ${missing.size} 种本机缺失（${missing.joinToString("、") { it.fontName }}），预览存在字体替代。"
         }
     }
 
@@ -120,6 +146,27 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         snapshot()
         val editor = DocumentModelEditor(session.document)
         editor.setParagraphText(session.document.paragraphs[index], newText)
+        updateFromSession(session.displayName)
+    }
+
+    /** 人工纠正段落角色（规格 §11）。 */
+    fun setUserRole(index: Int, role: com.gongwen.document.model.SemanticRole) {
+        val session = repo.current ?: return
+        if (index !in session.document.paragraphs.indices) return
+        session.document.paragraphs[index].userRole = role
+        updateFromSession(session.displayName)
+    }
+
+    /** 长按锁定/解锁格式（规格 §14 formatLock）。 */
+    fun toggleFormatLock(index: Int) {
+        val session = repo.current ?: return
+        if (index !in session.document.paragraphs.indices) return
+        val p = session.document.paragraphs[index]
+        p.formatLock = if (p.formatLock == com.gongwen.document.model.FormatLockScope.NONE) {
+            com.gongwen.document.model.FormatLockScope.PARAGRAPH
+        } else {
+            com.gongwen.document.model.FormatLockScope.NONE
+        }
         updateFromSession(session.displayName)
     }
 
@@ -207,5 +254,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearInfo() {
         _ui.update { it.copy(info = null, error = null) }
+    }
+
+    /** 当前会话（预览等需要访问原始模型的场景）。 */
+    fun currentSession(): com.gongwen.paiban.data.DocumentRepository.SessionDocument? = repo.current
+
+    /** PDF 导出结果提示。 */
+    fun notifyExportPdf(ok: Boolean) {
+        _ui.update {
+            if (ok) it.copy(info = "PDF 导出成功") else it.copy(error = "PDF 导出失败")
+        }
     }
 }
