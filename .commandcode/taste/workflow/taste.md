@@ -8,3 +8,4 @@
 - Wants explicit acceptance gates and a structured final report (PASS/FAIL/BLOCKED, accurate counts, known limitations clearly separated from intentionally out-of-scope items); a vague "done" is not acceptable. Confidence: 0.85
 - When existing code conflicts with the agreed architecture, prefers fixing the architecture over accommodating the wrong implementation ("优先修正架构，而不是兼容错误实现"). Confidence: 0.85
 - Forbids weakening tests to pass: no bulk-accepting golden snapshots to mask regressions, no lowering thresholds to make gates pass. Confidence: 0.85
+- Expects to personally install and try builds on their own phone as the hands-on user; when handing off an app, provide an installable (signed) artifact plus plain-language, non-developer installation steps rather than developer-oriented instructions. Confidence: 0.4
